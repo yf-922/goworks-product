@@ -2,13 +2,18 @@ package services
 
 import (
 	"encoding/json"
+	"log"
 	"product/datamodels"
 	"product/repositories"
+	"strconv"
 
 	"github.com/mediocregopher/radix/v3"
 )
 
-const productAllCacheKey = "product:all"
+const (
+	productAllCacheKey = "product:all"
+	productAllCacheTTL = 60
+)
 
 // IProductService 定义商品业务层对外能力。
 type IProductService interface {
@@ -44,13 +49,20 @@ func (p *ProductService) GetProductAll() ([]*datamodels.Product, error) {
 	var cacheValue string
 	err := p.redisPool.Do(radix.Cmd(&cacheValue, "GET",
 		productAllCacheKey))
+	if err != nil {
+		log.Println("product cache get error:", err)
+	}
 	if err == nil && cacheValue != "" {
 		var products []*datamodels.Product
-		if unmarshalErr := json.Unmarshal([]byte(cacheValue), &products); unmarshalErr == nil {
+		unmarshalErr := json.Unmarshal([]byte(cacheValue), &products)
+		if unmarshalErr == nil {
+			log.Println("product cache hit")
 			return products, nil
 		}
-	}
 
+		log.Println("product cache unmarshal error:", unmarshalErr)
+	}
+	log.Println("product cache miss, fallback to mysql")
 	products, err := p.productRepository.SelectAll()
 	if err != nil {
 		return nil, err
@@ -58,8 +70,8 @@ func (p *ProductService) GetProductAll() ([]*datamodels.Product, error) {
 
 	cacheBytes, err := json.Marshal(products)
 	if err == nil {
-		_ = p.redisPool.Do(radix.Cmd(nil, "SET", productAllCacheKey,
-			string(cacheBytes)))
+		_ = p.redisPool.Do(radix.Cmd(nil, "SETEX", productAllCacheKey,
+			strconv.Itoa(productAllCacheTTL), string(cacheBytes)))
 	}
 
 	return products, nil
@@ -70,7 +82,7 @@ func (p *ProductService) GetProductAll() ([]*datamodels.Product, error) {
 func (p *ProductService) DeleteProductById(id int64) bool {
 	ok := p.productRepository.Delete(id)
 	if ok {
-		_ = p.redisPool.Do(radix.Cmd(nil, "DEL", productAllCacheKey))
+		p.invalidateProductAllCache()
 	}
 	return ok
 }
@@ -81,7 +93,7 @@ func (p *ProductService) InsertProduct(product *datamodels.Product) (int64, erro
 	if err != nil {
 		return 0, err
 	}
-	_ = p.redisPool.Do(radix.Cmd(nil, "DEL", productAllCacheKey))
+	p.invalidateProductAllCache()
 	return productID, nil
 }
 
@@ -90,6 +102,10 @@ func (p *ProductService) UpdateProduct(product *datamodels.Product) error {
 	if err := p.productRepository.Update(product); err != nil {
 		return err
 	}
-	_ = p.redisPool.Do(radix.Cmd(nil, "DEL", productAllCacheKey))
+	p.invalidateProductAllCache()
 	return nil
+}
+
+func (p *ProductService) invalidateProductAllCache() {
+	_ = p.redisPool.Do(radix.Cmd(nil, "DEL", productAllCacheKey))
 }
