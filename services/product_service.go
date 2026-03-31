@@ -1,11 +1,14 @@
 package services
 
 import (
+	"encoding/json"
 	"product/datamodels"
 	"product/repositories"
 
 	"github.com/mediocregopher/radix/v3"
 )
+
+const productAllCacheKey = "product:all"
 
 // IProductService 定义商品业务层对外能力。
 type IProductService interface {
@@ -38,20 +41,53 @@ func (p *ProductService) GetProductById(id int64) (*datamodels.Product, error) {
 
 // GetProductAll 查询全部商品。
 func (p *ProductService) GetProductAll() ([]*datamodels.Product, error) {
-	return p.productRepository.SelectAll()
+	var cacheValue string
+	err := p.redisPool.Do(radix.Cmd(&cacheValue, "GET",
+		productAllCacheKey))
+	if err == nil && cacheValue != "" {
+		var products []*datamodels.Product
+		if unmarshalErr := json.Unmarshal([]byte(cacheValue), &products); unmarshalErr == nil {
+			return products, nil
+		}
+	}
+
+	products, err := p.productRepository.SelectAll()
+	if err != nil {
+		return nil, err
+	}
+
+	cacheBytes, err := json.Marshal(products)
+	if err == nil {
+		_ = p.redisPool.Do(radix.Cmd(nil, "SET", productAllCacheKey,
+			string(cacheBytes)))
+	}
+
+	return products, nil
+
 }
 
 // DeleteProductById 按 ID 删除商品。
 func (p *ProductService) DeleteProductById(id int64) bool {
+
 	return p.productRepository.Delete(id)
+
 }
 
 // InsertProduct 新增商品。
 func (p *ProductService) InsertProduct(product *datamodels.Product) (int64, error) {
-	return p.productRepository.Insert(product)
+	productID, err := p.productRepository.Insert(product)
+	if err != nil {
+		return 0, err
+	}
+	_ = p.redisPool.Do(radix.Cmd(nil, "DEL", productAllCacheKey))
+	return productID, nil
 }
 
 // UpdateProduct 更新商品信息。
 func (p *ProductService) UpdateProduct(product *datamodels.Product) error {
-	return p.productRepository.Update(product)
+	if err := p.productRepository.Update(product); err != nil {
+		return err
+	}
+	_ = p.redisPool.Do(radix.Cmd(nil, "DEL", productAllCacheKey))
+	return nil
 }
