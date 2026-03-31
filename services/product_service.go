@@ -68,9 +68,11 @@ func (p *ProductService) GetProductAll() ([]*datamodels.Product, error) {
 
 // DeleteProductById 按 ID 删除商品。
 func (p *ProductService) DeleteProductById(id int64) bool {
-
-	return p.productRepository.Delete(id)
-
+	ok := p.productRepository.Delete(id)
+	if ok {
+		_ = p.redisPool.Do(radix.Cmd(nil, "DEL", productAllCacheKey))
+	}
+	return ok
 }
 
 // InsertProduct 新增商品。
