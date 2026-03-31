@@ -51,6 +51,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Println("redis connected")
 	defer redisPool.Close()
 
 	// 创建应用级上下文，后续可用于依赖注入或资源释放控制。
