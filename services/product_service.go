@@ -3,6 +3,8 @@ package services
 import (
 	"product/datamodels"
 	"product/repositories"
+
+	"github.com/mediocregopher/radix/v3"
 )
 
 // IProductService 定义商品业务层对外能力。
@@ -18,11 +20,15 @@ type IProductService interface {
 // 当前逻辑较薄，主要是对 repository 做一层封装。
 type ProductService struct {
 	productRepository repositories.IProduct
+	redisPool         *radix.Pool
 }
 
 // NewProductService 创建商品业务层实例。
-func NewProductService(repository repositories.IProduct) IProductService {
-	return &ProductService{repository}
+func NewProductService(repository repositories.IProduct, redisPool *radix.Pool) IProductService {
+	return &ProductService{
+		productRepository: repository,
+		redisPool:         redisPool,
+	}
 }
 
 // GetProductById 按商品 ID 查询单个商品。

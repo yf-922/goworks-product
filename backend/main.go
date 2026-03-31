@@ -10,6 +10,7 @@ import (
 
 	"github.com/kataras/iris/v12"
 	"github.com/kataras/iris/v12/mvc"
+	"github.com/mediocregopher/radix/v3"
 )
 
 // main 是整个 Web 项目的启动入口。
@@ -52,6 +53,12 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Println("redis connected")
+	var pingResult string
+	if err = redisPool.Do(radix.Cmd(&pingResult, "PING")); err != nil {
+		log.Fatal(err)
+	}
+
+	log.Println("redis ping:", pingResult)
 	defer redisPool.Close()
 
 	// 创建应用级上下文，后续可用于依赖注入或资源释放控制。
@@ -61,7 +68,7 @@ func main() {
 	// 注册商品模块：
 	// repository 负责数据库访问，service 负责业务封装，controller 负责 HTTP 请求处理。
 	productRepository := repositories.NewProductManager("product", db)
-	productService := services.NewProductService(productRepository)
+	productService := services.NewProductService(productRepository, redisPool)
 	productParty := app.Party("/product")
 	product := mvc.New(productParty)
 	product.Register(ctx, productService)
