@@ -42,8 +42,16 @@ func main() {
 	// 初始化数据库连接。
 	db, err := common.GetMySQLConn()
 	if err != nil {
+
 		log.Fatal(err)
 	}
+
+	// 初始化redis连接
+	redisPool, err := common.GetRedisPool()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer redisPool.Close()
 
 	// 创建应用级上下文，后续可用于依赖注入或资源释放控制。
 	ctx, cancel := context.WithCancel(context.Background())
