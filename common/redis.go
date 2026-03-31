@@ -1,8 +1,11 @@
 package common
 
 import (
+	"fmt"
 	"os"
 	"strconv"
+
+	"github.com/mediocregopher/radix/v3"
 )
 
 const (
@@ -26,4 +29,20 @@ func NewRedisConfig() RedisConfig {
 		Host: envOrDefault("REDIS_HOST", defaultRedisHost),
 		Port: port,
 	}
+}
+
+func (c RedisConfig) Addr() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+}
+
+func GetRedisPool() (*radix.Pool, error) {
+	return GetRedisPoolByconfig(NewRedisConfig())
+}
+
+func GetRedisPoolByconfig(config RedisConfig) (*radix.Pool, error) {
+	pool, err := radix.NewPool("tcp", config.Addr(), 10)
+	if err != nil {
+		return nil, err
+	}
+	return pool, nil
 }
