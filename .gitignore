@@ -3,3 +3,5 @@
 .codex-gopath/
 .codex-telemetry/
 fronted/
+__pycache__/
+*.py[cod]
